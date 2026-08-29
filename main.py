@@ -143,6 +143,11 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
     for i, username in enumerate(usernames):
         tfa_key = keys[i]
         cl = Client()
+        
+        # সার্ভার আইপি ব্ল্যাকলিস্ট বা বট ডিটেক্ট এড়াতে রিয়েল ডিভাইস ও ইউজার-এজেন্ট সেট করা
+        cl.set_user_agent("Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 287.0.0.28.104")
+        cl.delay_range = [2, 5]  # রিকোয়েস্টগুলোর মাঝে নিরাপদ বিরতি
+        
         try:
             totp_code = pyotp.TOTP(tfa_key.replace(" ", "")).now()
             login_success = cl.login(username, password, verification_code=totp_code)
@@ -180,10 +185,12 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
                 reason = "2FA কি (Key) ভুল বা মেয়াদোত্তীর্ণ।"
             elif "checkpoint" in err_str or "challenge" in err_str:
                 reason = "ইনস্টাগ্রাম অ্যাকাউন্ট সিকিউরিটি চেকপয়েন্টে (Checkpoint) আটকে গেছে।"
+            elif "blacklist" in err_str or "ip" in err_str or "email" in err_str or "connection" in err_str:
+                reason = "সার্ভার আইপি (IP) ইনস্টাগ্রামের ব্ল্যাকলিস্টে রয়েছে বা অতিরিক্ত রিকোয়েস্টের কারণে ব্লক করেছে।"
             elif "wait" in err_str or "rate limit" in err_str:
                 reason = "অতিরিক্ত চেষ্টার কারণে ইনস্টাগ্রাম সাময়িকভাবে ব্লক করেছে (Rate Limit)।"
             else:
-                reason = f"অন্যান্য টেকনিক্যাল সমস্যা: {str(e)}"
+                reason = f"টেকনিক্যাল সমস্যা: {str(e)}"
 
             await update.message.reply_text(
                 f"❌ *সিরিয়াল {i+1}: সমস্যা দেখা দিয়েছে*\n"
@@ -192,7 +199,7 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
                 parse_mode="Markdown"
             )
 
-    await update.message.reply_text("✨ সমস্ত অ্যাকাউন্টগুলোর প্রসেসিং শেষ! নতুন কাজ শুরু করতে থ্রি-ডট মেনু থেকে /restart এ ক্লিক করুন।")
+    await update.message.reply_text("✨ সমস্ত অ্যাকাউন্টগুলোর প্রসেসিং শেষ! নতুন কাজ শুরু করতে থ্রি-ডট মেনু থেকে /restart এ ক্লিক করুন።")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
