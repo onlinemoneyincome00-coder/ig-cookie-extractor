@@ -121,7 +121,7 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_2FA
 
-# 2FA কি নিয়ে প্রসেস করা এবং ফাইল আকারে কুকিজ পাঠানো (বিশ্লেষণভিত্তিক অপ্টিমাইজড লগইন লজিক)
+# 2FA কি নিয়ে প্রসেস করা এবং ফাইল আকারে কুকিজ পাঠানো
 async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     keys = [line.strip() for line in text.split('\n') if line.strip()]
@@ -139,32 +139,42 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"⚠️ আপনি ইউজারনেম দিয়েছেন {len(usernames)} টি কিন্তু কি (Key) দিয়েছেন {len(keys)} টি। দয়া করে সঠিক সংখ্যায় কি দিন।")
         return GET_2FA
 
-    await update.message.reply_text("🔄 অ্যাকাউন্টগুলো সিকিউরড হ্যান্ডশেকের মাধ্যমে চেক করা হচ্ছে, একটু অপেক্ষা করুন...")
+    await update.message.reply_text("🔄 অ্যাকাউন্টগুলো অপ্টিমাইজড ডিভাইসের মাধ্যমে চেক করা হচ্ছে, একটু অপেক্ষা করুন...")
 
     for i, username in enumerate(usernames):
         tfa_key = keys[i]
         
-        # প্রতি অ্যাকাউন্টের জন্য ফ্রেশ এবং আলাদা ইনস্ট্যান্স তৈরি করা
         cl = Client()
         
-        # ইনস্টাগ্রামের রিয়াল মোবাইল অ্যাপ ইউজার এজেন্ট ও সেটিংস কনফিগারেশন
+        # ইনস্টাগ্রামের রিয়াল ডিভাইস স্পেসিফিকেশন ও ইউজার এজেন্ট সেটআপ
         cl.set_user_agent("Instagram 269.0.0.18.75 Android (26/8.0.0; 480dpi; 1080x1920; Xiaomi; Redmi Note 5; m1e; qcom; en_US; 319245132)")
-        cl.delay_range = [4, 8]  # বট ডিটেকশন এড়াতে প্রতিটি রিকোয়েস্টে নিরাপদ বিরতি
+        try:
+            cl.set_device({
+                "app_version": "269.0.0.18.75",
+                "android_version": 26,
+                "android_release": "8.0.0",
+                "dpi": "480dpi",
+                "resolution": "1080x1920",
+                "manufacturer": "Xiaomi",
+                "device": "Redmi Note 5",
+                "model": "m1e",
+                "cpu": "qcom"
+            })
+        except Exception:
+            pass
+
+        cl.delay_range = [3, 6]  # রিকোয়েস্টগুলোর মাঝে নিরাপদ বিরতি
         
         try:
-            # ১. প্রি-লগইন হ্যান্ডশেক ও CSRF কুকিজ জেনারেট করার জন্য বেসিক রিকোয়েস্ট
+            # প্রি-লগইন হ্যান্ডশেক ও CSRF কুকিজ সিঙ্ক করা
             try:
                 cl.get_iv()
             except Exception:
                 pass
             
-            # সার্ভার ফিংগারপ্রিন্ট এড়াতে সামান্য বিরতি
             time.sleep(2)
 
-            # ২. টু-এফএ কোড জেনারেট করা
             totp_code = pyotp.TOTP(tfa_key.replace(" ", "")).now()
-            
-            # ৩. লগইন এক্সিকিউট করা
             login_success = cl.login(username, password, verification_code=totp_code)
             
             if login_success:
@@ -199,11 +209,11 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
             elif "two_factor" in err_str or "totp" in err_str or "code" in err_str:
                 reason = "2FA কি (Key) ভুল বা মেয়াদোত্তীর্ণ।"
             elif "csrf" in err_str or "token" in err_str:
-                reason = "ইনস্টাগ্রাম সার্ভার সিকিউরিটি টোকেন (CSRF) মিসিং বা ব্লক করেছে।"
+                reason = "CSRF টোকেন মিসিং বা সার্ভার সিকিউরিটি ব্লক।"
             elif "checkpoint" in err_str or "challenge" in err_str:
                 reason = "ইনস্টাগ্রাম অ্যাকাউন্ট সিকিউরিটি চেকপয়েন্টে (Checkpoint) আটকে গেছে।"
             elif "blacklist" in err_str or "ip" in err_str or "email" in err_str:
-                reason = "হোস্টিং সার্ভারের আইপি (IP) ইনস্টাগ্রামের ব্ল্যাকলিস্টে রয়েছে। লোকাল পিসি বা ভিন্ন প্রক্সি ব্যবহার করতে হবে।"
+                reason = "সার্ভার আইপি ব্ল্যাকলিস্টে রয়েছে বা অতিরিক্ত রিকোয়েস্ট ব্লক করেছে।"
             elif "wait" in err_str or "rate limit" in err_str:
                 reason = "অতিরিক্ত চেষ্টার কারণে ইনস্টাগ্রাম সাময়িকভাবে ব্লক করেছে (Rate Limit)।"
             else:
@@ -216,7 +226,6 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
                 parse_mode="Markdown"
             )
             
-        # প্রতি অ্যাকাউন্টের মাঝে অতিরিক্ত ডিলে যাতে আইপি ফ্লাডিং না হয়
         time.sleep(3)
 
     await update.message.reply_text("✨ সমস্ত অ্যাকাউন্টগুলোর প্রসেসিং শেষ! নতুন কাজ শুরু করতে থ্রি-ডট মেনু থেকে /restart এ ক্লিক করুন।")
