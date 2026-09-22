@@ -1,4 +1,3 @@
-
 import os
 import logging
 import json
@@ -128,30 +127,14 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
         tfa_key = keys[i]
         cl = Client()
         
-        # ইনস্টাগ্রামের অফিসিয়াল অ্যান্ড্রয়েড ডিভাইস ও ইউজার এজেন্ট
-        cl.set_user_agent("Instagram 300.0.0.25.112 Android (31/12; 480dpi; 1080x2340; Samsung; Galaxy S21; SM-G991B; exynos2100; en_US; 452345121)")
-        try:
-            cl.set_device({
-                "app_version": "300.0.0.25.112",
-                "android_version": 31,
-                "android_release": "12",
-                "dpi": "480dpi",
-                "resolution": "1080x2340",
-                "manufacturer": "Samsung",
-                "device": "Galaxy S21",
-                "model": "SM-G991B",
-                "cpu": "exynos2100"
-            })
-        except Exception:
-            pass
-
+        # লাইব্রেরির নিজস্ব আপডেটেড ডিফল্ট ডিভাইস ও ইউজার এজেন্ট ব্যবহার করা (আউট-অফ-ডেট এরর এড়াতে)
         cl.delay_range = [2, 4]
         
         try:
             # TOTP কোড জেনারেট করা
             totp_code = pyotp.TOTP(tfa_key.replace(" ", "")).now()
             
-            # সরাসরি লগইন রিকোয়েস্ট পাঠানো (দ্রুত ও নিখুঁত ফলাফল পেতে)
+            # সরাসরি লগইন রিকোয়েস্ট পাঠানো
             login_success = cl.login(username, password, verification_code=totp_code)
             
             if login_success:
@@ -186,8 +169,8 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
                 reason = "2FA কি (Secret Key) সঠিক নয় বা মেয়াদোত্তীর্ণ।"
             elif "checkpoint" in err_str or "challenge" in err_str:
                 reason = "অ্যাকাউন্টটি ইনস্টাগ্রাম সিকিউরিটি চেকপয়েন্টে (Checkpoint) আটকে আছে। এটি ব্রাউজারে বা অ্যাপে লগইন করে ভেরিফাই করতে হবে।"
-            elif "user_id_from_username" in err_str or "not found" in err_str:
-                reason = "ইনস্টাগ্রামে এই নামের কোনো ভ্যালিড অ্যাকাউন্ট খুঁজে পাওয়া যায়নি।"
+            elif "out of date" in err_str or "version" in err_str:
+                reason = "ইনস্টাগ্রাম এপিআই ভার্সন আপডেট রিকোয়েস্ট করেছে।"
             elif "wait" in err_str or "rate limit" in err_str or "please wait" in err_str:
                 reason = "অতিরিক্ত চেষ্টার কারণে ইনস্টাগ্রাম সাময়িকভাবে রেট লিমিট করেছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
             else:
