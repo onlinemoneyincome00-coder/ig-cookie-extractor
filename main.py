@@ -1,3 +1,4 @@
+
 import os
 import logging
 import json
@@ -64,7 +65,7 @@ async def start_extraction(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_USERNAMES
 
-# ইউজারনেম রিসিভ ও ভ্যালিডেশন
+# ইউজারনেম রিসিভ করা
 async def receive_usernames(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     usernames = [line.strip() for line in text.split('\n') if line.strip()]
@@ -103,7 +104,7 @@ async def receive_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GET_2FA
 
-# মূল লগইন এবং কুকিজ এক্সট্রাকশন লজিক (রিয়েল ভ্যালিডেশন সহ)
+# সরাসরি ফাস্ট লগইন এবং কুকিজ এক্সট্রাকশন লজিক
 async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     keys = [line.strip() for line in text.split('\n') if line.strip()]
@@ -121,7 +122,7 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"⚠️ আপনি ইউজারনেম দিয়েছেন {len(usernames)} টি কিন্তু কি (Key) দিয়েছেন {len(keys)} টি। দয়া করে সঠিক সংখ্যায় কি দিন।")
         return GET_2FA
 
-    await update.message.reply_text("🔄 অ্যাকাউন্টগুলো ইনস্টাগ্রাম সার্ভারে রিয়েল-টাইম চেক করা হচ্ছে, একটু অপেক্ষা করুন...")
+    await update.message.reply_text("🔄 অ্যাকাউন্টগুলো প্রসেস করা হচ্ছে, দ্রুত কুকিজ এক্সট্রাক্ট করা হচ্ছে...")
 
     for i, username in enumerate(usernames):
         tfa_key = keys[i]
@@ -144,27 +145,13 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
         except Exception:
             pass
 
-        cl.delay_range = [3, 6]
+        cl.delay_range = [2, 4]
         
         try:
-            # আগে চেক করা ইউজারনেমটি ইনস্টাগ্রামে আদৌ ভ্যালিড কি না
-            try:
-                user_id_ig = cl.user_id_from_username(username)
-                if not user_id_ig:
-                    raise Exception("invalid_user")
-            except Exception:
-                await update.message.reply_text(
-                    f"❌ *সিরিয়াল {i+1}: ভুল ইউজারনেম*\n"
-                    f"👤 ইউজারনেম: `{username}`\n"
-                    f"⚠️ কারণ: ইনস্টাগ্রামে এই নামের কোনো ভ্যালিড অ্যাকাউন্ট খুঁজে পাওয়া যায়নি।",
-                    parse_mode="Markdown"
-                )
-                continue
-
             # TOTP কোড জেনারেট করা
             totp_code = pyotp.TOTP(tfa_key.replace(" ", "")).now()
             
-            # রিয়েল লগইন রিকোয়েস্ট পাঠানো
+            # সরাসরি লগইন রিকোয়েস্ট পাঠানো (দ্রুত ও নিখুঁত ফলাফল পেতে)
             login_success = cl.login(username, password, verification_code=totp_code)
             
             if login_success:
@@ -198,9 +185,9 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
             elif "two_factor" in err_str or "totp" in err_str or "code" in err_str:
                 reason = "2FA কি (Secret Key) সঠিক নয় বা মেয়াদোত্তীর্ণ।"
             elif "checkpoint" in err_str or "challenge" in err_str:
-                reason = "অ্যাকাউন্টটি ইনস্টাগ্রাম সিকিউরিটি চেকপয়েন্টে (Checkpoint) আটকে আছে। এটি ব্রাউজারে লগইন করে ঠিক করতে হবে।"
-            elif "invalid_user" in err_str or "user_id_from_username" in err_str:
-                reason = "ইনস্টাগ্রামে এই অ্যাকাউন্টটি অস্তিত্বহীন বা ডিলিট করা।"
+                reason = "অ্যাকাউন্টটি ইনস্টাগ্রাম সিকিউরিটি চেকপয়েন্টে (Checkpoint) আটকে আছে। এটি ব্রাউজারে বা অ্যাপে লগইন করে ভেরিফাই করতে হবে।"
+            elif "user_id_from_username" in err_str or "not found" in err_str:
+                reason = "ইনস্টাগ্রামে এই নামের কোনো ভ্যালিড অ্যাকাউন্ট খুঁজে পাওয়া যায়নি।"
             elif "wait" in err_str or "rate limit" in err_str or "please wait" in err_str:
                 reason = "অতিরিক্ত চেষ্টার কারণে ইনস্টাগ্রাম সাময়িকভাবে রেট লিমিট করেছে। কিছুক্ষণ পর আবার চেষ্টা করুন।"
             else:
@@ -213,7 +200,7 @@ async def receive_2fa_and_process(update: Update, context: ContextTypes.DEFAULT_
                 parse_mode="Markdown"
             )
             
-        time.sleep(4) # আইপি থ্রটলিং এড়াতে বিরতি
+        time.sleep(2)
 
     await update.message.reply_text("✨ সমস্ত অ্যাকাউন্টগুলোর প্রসেসিং শেষ! নতুন কাজ শুরু করতে মেনু থেকে /restart এ ক্লিক করুন।")
     return ConversationHandler.END
